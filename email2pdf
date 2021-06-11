@@ -122,7 +122,7 @@ def main(argv, syslog_handler, syserr_handler):
             payload = header_info + payload
 
         logger.debug("Final payload before output_body_pdf: " + payload)
-        output_body_pdf(input_email, bytes(payload, 'UTF-8'), output_file_name)
+        output_body_pdf(args, input_email, bytes(payload, 'UTF-8'), output_file_name)
 
     if args.attachments:
         number_of_attachments = handle_attachments(input_email,
@@ -184,6 +184,9 @@ def handle_args(argv):
                         "the output directory for the body PDF, with a date-and-time based filename attached. "
                         "In either case, this parameter also specifies the directory in which attachments are "
                         "stored. Defaults to the current directory (i.e. " + os.getcwd() + ").")
+
+    parser.add_argument("--user-style-sheet",
+                        help="Use custom style sheet for wkhtmltopdf")
 
     body_attachment_options = parser.add_mutually_exclusive_group()
 
@@ -396,12 +399,21 @@ def handle_html_message_body(input_email, part):
     return (payload, cid_parts_used)
 
 
-def output_body_pdf(input_email, payload, output_file_name):
+def output_body_pdf(args, input_email, payload, output_file_name):
     logger = logging.getLogger("email2pdf")
+    
+    params = [WKHTMLTOPDF_EXTERNAL_COMMAND, '-q']
+    params.extend(['--load-error-handling', 'ignore'])
+    params.extend(['--load-media-error-handling', 'ignore'])
+    params.extend(['--encoding', 'utf-8'])
 
-    wkh2p_process = Popen([WKHTMLTOPDF_EXTERNAL_COMMAND, '-q', '--load-error-handling', 'ignore',
-                           '--load-media-error-handling', 'ignore', '--encoding', 'utf-8', '-',
-                           output_file_name], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    if args.user_style_sheet:
+        params.extend(['--user-style-sheet', args.user_style_sheet])
+    
+    # output_file_name always last
+    params.extend(['-', output_file_name])
+
+    wkh2p_process = Popen(params, stdin=PIPE, stdout=PIPE, stderr=PIPE)
     output, error = wkh2p_process.communicate(input=payload)
     assert output == b''
 
